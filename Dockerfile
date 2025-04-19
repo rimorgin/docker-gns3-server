@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.21
 
 # Copy files into the container
 ADD ./start.sh /start.sh
@@ -25,4 +25,4 @@ WORKDIR /data
 
 VOLUME ["/data"]
 
-CMD [ "/start.sh" ]
+ENTRYPOINT [ "/postinstall.sh" ] 

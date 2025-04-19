@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  gns3:
+    image: rimorgin/gns3server:latest
+    container_name: gns3
+    privileged: true
+    restart: unless-stopped
+    environment:
+      UUID: rimorgin
+      BRIDGE_ADDRESS: 172.21.1.1/24
+      OPENVPN_SRVR_IP: 10.15.20.34
+    ports:
+      - "3080:3080"
+      - "1194:1194/udp"
+    volumes:
+      - ./data:/data

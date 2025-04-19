@@ -6,43 +6,14 @@ log() {
 
 log "Setting up OpenVPN"
 
-log "Changing the GNS3 server configuration to listen on VPN interface"
+#MY_IP_ADDR=$(dig @ns1.google.com -t txt o-o.myaddr.l.google.com +short -4 | sed 's/"//g')
 
-log "Installing required packages"
-
-apk add --no-cache \
-    nginx \
-    openvpn \
-    util-linux \
-    bind-tools \
-    openssl \
-    openrc \
-    && mkdir -p /etc/nginx/sites-enabled \
-    && mkdir -p /etc/nginx/sites-available \
-    && echo "include /etc/nginx/sites-enabled/*.conf;" >> /etc/nginx/nginx.conf
-
-MY_IP_ADDR=$(dig @ns1.google.com -t txt o-o.myaddr.l.google.com +short -4 | sed 's/"//g')
+MY_IP_ADDR=${OPENVPN_SRVR_IP:-$(dig @ns1.google.com -t txt o-o.myaddr.l.google.com +short -4 | sed 's/"//g')}
 
 log "IP detected: $MY_IP_ADDR"
 
-UUID=$(uuidgen)
-
-log "Updating motd (this will be skipped if /etc/update-motd.d doesn't exist)"
-if [ -d /etc/update-motd.d ]; then
-    cat <<EOFMOTD > /etc/update-motd.d/70-openvpn
-#!/bin/sh
-echo ""
-echo "_______________________________________________________________________________________________"
-echo "Download the VPN configuration here:"
-echo "http://$MY_IP_ADDR:8003/$UUID/$HOSTNAME.ovpn"
-echo ""
-echo "And add it to your openvpn client."
-echo ""
-echo "apk del nginx to disable the HTTP server."
-echo "And remove this file with rm /etc/update-motd.d/70-openvpn"
-EOFMOTD
-    chmod 755 /etc/update-motd.d/70-openvpn
-fi
+UUID=${UUID:-$(uuidgen)}
+log "UUID to use for the OpenVPN client config: $UUID"
 
 mkdir -p /etc/openvpn/
 mkdir -p /data/ovpns  # persistent config directory
@@ -64,6 +35,7 @@ client
 nobind
 comp-lzo
 dev tun
+proto udp
 <key>
 $(cat /etc/openvpn/key.pem)
 </key>
@@ -73,56 +45,46 @@ $(cat /etc/openvpn/cert.pem)
 <ca>
 $(cat /etc/openvpn/cert.pem)
 </ca>
-<dh>
-$(cat /etc/openvpn/dh.pem)
-</dh>
 <connection>
 remote $MY_IP_ADDR 1194 udp
 </connection>
 EOFCLIENT
 
-cp /root/client.ovpn /data/ovpns/$HOSTNAME.ovpn  # save to persistent storage
+cp /root/client.ovpn /data/ovpns/$UUID.ovpn  # save to persistent storage
 
-cat <<EOFUDP > /etc/openvpn/udp1194.conf
-server 172.16.253.0 255.255.255.0
+cat <<EOFCONF > /etc/openvpn/openvpn.conf
+server 10.0.0.0 255.255.255.0
 verb 3
 duplicate-cn
 comp-lzo
-key key.pem
-ca cert.pem
-cert cert.pem
-dh dh.pem
+key /etc/openvpn/key.pem
+ca /etc/openvpn/cert.pem
+cert /etc/openvpn/cert.pem
+dh /etc/openvpn/dh.pem
 keepalive 10 60
+ifconfig-pool-persist ipp.txt
+push "route 10.0.0.0 255.0.0.0"
+push "dhcp-option DNS 10.0.0.1"
 persist-key
 persist-tun
 proto udp
 port 1194
+user nobody
+group nobody
 dev tun1194
-status openvpn-status-1194.log
-log-append /var/log/openvpn-udp1194.log
-EOFUDP
+status /var/log/openvpn-status.log
+log-append /var/log/openvpn.log
+EOFCONF
 
-log "Setting up HTTP server for serving client config"
-mkdir -p /usr/share/nginx/openvpn/$UUID
-cp /data/ovpns/$HOSTNAME.ovpn /usr/share/nginx/openvpn/$UUID/$HOSTNAME.ovpn
-touch /usr/share/nginx/openvpn/$UUID/index.html
-touch /usr/share/nginx/openvpn/index.html
-
-cat <<EOFNGINX > /etc/nginx/sites-available/openvpn
-server {
-    listen 8003;
-    root /usr/share/nginx/openvpn;
-}
-EOFNGINX
-
-[ -f /etc/nginx/sites-enabled/openvpn ] || ln -s /etc/nginx/sites-available/openvpn /etc/nginx/sites-enabled/
-
-rc-service nginx restart
+# (Optional) Let OpenRC shut up if needed
+mkdir -p /run/openrc
+touch /run/openrc/softlevel
 
 log "Restarting OpenVPN and GNS3"
 
-rc-service openvpn restart
-rc-service gns3 restart
+log "Starting OpenVPN manually"
+openvpn --config /etc/openvpn/openvpn.conf &
 
-log "VPN client config saved to /data/ovpns/$HOSTNAME.ovpn"
-log "You can also download it from: http://$MY_IP_ADDR:8003/$UUID/$HOSTNAME.ovpn"
+log "VPN client config saved to /data/ovpns/$UUID.ovpn"
+
+exec /start.sh
