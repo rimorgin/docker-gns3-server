@@ -2,6 +2,7 @@ FROM alpine:3.21.3
 
 # Install the magic wrapper.
 ADD ./start.sh /start.sh
+ADD ./postinstall.sh /postinstall.sh
 ADD ./config.ini /config.ini
 ADD ./requirements.txt /requirements.txt
 COPY dependencies.json /tmp/dependencies.json
@@ -11,6 +12,9 @@ RUN mkdir /data && \
     && jq -r 'to_entries | .[] | .key + "=" + .value' /tmp/dependencies.json | xargs apk add --no-cache \
     && pip install -r /requirements.txt --break-system-packages \
     && apk del --purge build-dependencies
+
+RUN chmod +x /start.sh
+RUN chmod +x /postinstall.sh
 
 CMD [ "/start.sh" ]
 
