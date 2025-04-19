@@ -1,27 +1,28 @@
-FROM alpine:3.21.3
+FROM alpine:latest
 
-# Install the magic wrapper.
+# Copy files into the container
 ADD ./start.sh /start.sh
 ADD ./postinstall.sh /postinstall.sh
 ADD ./config.ini /config.ini
 ADD ./requirements.txt /requirements.txt
 COPY dependencies.json /tmp/dependencies.json
 
+# Convert potential CRLF to LF and make scripts executable
+RUN sed -i 's/\r$//' /start.sh /postinstall.sh && \
+    chmod +x /start.sh /postinstall.sh
+
+# Install dependencies and Python requirements
 RUN mkdir /data && \
-    apk add --no-cache --virtual=build-dependencies jq gcc python3-dev musl-dev linux-headers \
-    && jq -r 'to_entries | .[] | .key + "=" + .value' /tmp/dependencies.json | xargs apk add --no-cache \
-    && pip install -r /requirements.txt --break-system-packages \
-    && apk del --purge build-dependencies
+    apk add --no-cache --virtual=build-dependencies jq gcc python3-dev musl-dev linux-headers && \
+    jq -r 'to_entries | .[] | .key + "=" + .value' /tmp/dependencies.json | xargs apk add --no-cache && \
+    pip install -r /requirements.txt --break-system-packages && \
+    apk del --purge build-dependencies
 
-RUN chmod +x /start.sh
-RUN chmod +x /postinstall.sh
-
-CMD [ "/start.sh" ]
-
-# workaround for https://github.com/GNS3/gns3-server/issues/2367
-RUN ln -s /bin/busybox /usr/lib/python*/site-packages/gns3server/compute/docker/resources/bin
+# Workaround for GNS3 bug
+RUN ln -s /bin/busybox /usr/lib/python*/site-packages/gns3server/compute/docker/resources/bin || true
 
 WORKDIR /data
 
 VOLUME ["/data"]
 
+CMD [ "/start.sh" ]

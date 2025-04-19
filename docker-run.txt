@@ -1,4 +1,4 @@
 docker run --rm -d  --name gns3 -p 3080:3080  --privileged -e BRIDGE_ADDRESS="172.21.1.1/24" -v C:/Users/pc/Documents/Containers/docker-gns3-server/data:/data jsimonetti/gns3-server:latest 
 
 
-docker run --rm -d  --name gns3 -p 3080:3080  --privileged -e BRIDGE_ADDRESS="172.21.1.1/24" -v C:/Users/pc/Documents/Containers/docker-gns3-server/data:/data rimorgin/gns3server:latest 
+docker run --rm -d  --name gns3 -p 3080:3080  --privileged -e BRIDGE_ADDRESS="172.21.1.1/24" -v data:/data rimorgin/gns3server:latest 
